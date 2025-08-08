@@ -4,10 +4,8 @@ import time
 REQUEST_ID = 0x7DF
 RESPONSE_ID = 0x7E8
 
-# connection
 bus = can.interface.Bus(channel='vcan0', interface='socketcan')
 
-# function to send and receive data from ecu
 def send_and_wait(data, timeout=1):
     msg = can.Message(arbitration_id=REQUEST_ID, data=data, is_extended_id=False)
     bus.send(msg)
@@ -48,7 +46,7 @@ key_high = (key >> 8) & 0xFF
 key_low = key & 0xFF
 resp = send_and_wait([0x27, 0x02, key_high, key_low])
 if resp and resp[0] ==  0x7F:
-    print("Rejected the key as expected", )
+    print("Rejected the key as expected -- TEST 1", )
 else:
     print("key accepted after timeout!!!" ,hex(resp[0]))
 
@@ -59,16 +57,17 @@ key_high = (key >> 8) & 0xFF
 key_low = key & 0xFF
 resp = send_and_wait([0x27, 0x02, key_high, key_low])
 if resp and resp[0] == 0x67:
-    print("Correct key accepted")
+    print("Correct key accepted -- TEST 2")
 else:
     print("correct key rejected!!!")
 
 # Trying to Re-Sending Same Key
 resp = send_and_wait([0x27, 0x02, key_high, key_low])
 if resp and resp[0] == 0x7F:
-    print("Repeated key correctly rejected")
+    print("Repeated key correctly rejected -- TEST 3")
 else:
     print("Repeated key was accepted (security flaw)",hex(resp[0]))
+
 
 # sending Wrong Keys Until Lockout
 for i in range(5):
@@ -81,21 +80,21 @@ for i in range(5):
 # Requesting Seed While Locked (Should Fail)
 resp = send_and_wait([0x27, 0x01])
 if resp and resp[0] == 0x7F:
-    print("ECU locked as expected")
+    print("ECU locked as expected --- TEST 4")
 else:
     print("ECU did not lock after failed attempts" , hex(resp[0]))
 
 # Resetting ecu
 resp = send_and_wait([0x11])
 if resp and resp[0] == 0x51:
-    print("ECU resetted as expected")
+    print("ECU resetted as expected -- TEST 5")
 else:
     print("ECU did  not resetted" , hex(resp[0]))
 
 # Trying to Re-Sending Same Key after resetting ecu
 resp = send_and_wait([0x27, 0x02, key_high, key_low])
 if resp and resp[0] == 0x7F:
-    print("Repeated key correctly rejected after resetting")
+    print("Repeated key correctly rejected after resetting -- TEST 6")
 else:
     print("Repeated key was accepted (security flaw)",hex(resp[0]))
 
