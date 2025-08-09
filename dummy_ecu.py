@@ -15,10 +15,8 @@ seed = None
 last_key = None
 failed_attempts = 0
 locked_until = 0
-locked = False
 seed_sent_time = 0
-repeated_key = False
-last_seed = None
+current_session = 0x01
 
 # Start VCAN
 bus = can.interface.Bus(channel=VCAN_CHANNEL, interface='socketcan')
@@ -26,13 +24,21 @@ print(f"ECU started on {VCAN_CHANNEL}")
 
 # Generate random seed
 def generate_seed():
-    if not locked:
-       last_key = None
-       return random.randint(0, 0xFFFF)  
+    last_key = None
+    return random.randint(0, 0xFFFF)  
 
 # Compute key
 def compute_key(seed_val):
     return (seed_val + 1) & 0xFFFF
+
+# ecu reset function
+def reset_ecu_state():
+    global seed, last_key, failed_attempts, locked_until
+    seed = None
+    last_key = None
+    failed_attempts = 0
+    locked_until = 0
+    print("ECU security state reset")
 
 while True:
     msg = bus.recv()
@@ -44,17 +50,22 @@ while True:
 
     # Session Control (0x10)
     if sid == 0x10 and data[1] == 0x03:
+        new_session = data[1]
+        if current_session != new_session:
+            print(f"session changes from {hex(current_session)} to {hex(new_session)}")
+            current_session = new_session
+            reset_ecu_state()
         print("Diagnostic session started")
         bus.send(can.Message(arbitration_id=RESPONSE_ID, data=[0x50, 0x03], is_extended_id=False))
 
     # ECU Reset (0x11)
     elif sid == 0x11:
         print("ECU Reset command received")
-        bus.send(can.Message(arbitration_id=RESPONSE_ID, data=[0x51], is_extended_id=False))
         seed = None
         last_key = None
         failed_attempts = 0
         locked_until = 0
+        bus.send(can.Message(arbitration_id=RESPONSE_ID, data=[0x51], is_extended_id=False))
 
     # Security Access (0x27)
     elif sid == 0x27:
@@ -68,7 +79,6 @@ while True:
 
         # Request Seed
         if subfn in [1, 3, 5]:
-            locked = False
             seed = generate_seed()
             last_key = None
             seed_sent_time = time.time()
@@ -87,16 +97,12 @@ while True:
             key_recv = (data[2] << 8) | data[3]
 
             # Repeated key
-            if last_key == key_recv or last_seed == seed:
-                repeated_key = True
+            if last_key == key_recv :
                 print("Repeated key detected, rejecting")
                 bus.send(can.Message(arbitration_id=RESPONSE_ID, data=[0x7F, 0x27, 0x22], is_extended_id=False))
                 continue
-            else:
-                repeated_key = False
-
             # Timeout check
-            if time.time() - seed_sent_time > SESSION_TIMEOUT:
+            elif time.time() - seed_sent_time > SESSION_TIMEOUT:
                 print("Key received after timeout, rejecting")
                 bus.send(can.Message(arbitration_id=RESPONSE_ID, data=[0x7F, 0x27, 0x37], is_extended_id=False))
                 continue
@@ -106,7 +112,6 @@ while True:
                 print(f"Correct key for seed {seed:04X}")
                 bus.send(can.Message(arbitration_id=RESPONSE_ID, data=[0x67, subfn], is_extended_id=False))
                 failed_attempts = 0
-                last_seed = seed
                 last_key = key_recv
                 locked_until = 0
 
@@ -116,7 +121,6 @@ while True:
                 print(f"Wrong key! Attempts: {failed_attempts}")
                 if failed_attempts >= MAX_FAILED_ATTEMPTS:
                     locked_until = time.time() + LOCKOUT_TIME
-                    locked = True
                     print(f"ECU locked for {LOCKOUT_TIME} seconds")
                 bus.send(can.Message(arbitration_id=RESPONSE_ID, data=[0x7F, 0x27, 0x35], is_extended_id=False))
 
