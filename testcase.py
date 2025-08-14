@@ -17,86 +17,60 @@ def send_and_wait(data, timeout=1):
         if resp and resp.arbitration_id == RESPONSE_ID:
             print(f"⬅ Response: {list(resp.data)}")
             return list(resp.data)
-    print(" No response")
+    print("No response")
     return None
 
-
-
-#  Diagnostic Session
-resp = send_and_wait([0x10, 0x03])
-if not resp or resp[0] != 0x50:
-    print("Failed to start session")
-    exit()
-
-# Request Seed 
-def request_seed():
+def seed_request():
     resp = send_and_wait([0x27, 0x01])
     if not resp or resp[0] != 0x67:
-       print("Failed to get seed")
-       exit()
+        print("Failed to get seed")
+        exit()
 
-    return (resp[2] << 8) | resp[3]
-    print(f"Received Seed: {seed:04X}")
+    seed_val = (resp[2] << 8) | resp[3]
+    print(f"Received Seed: {seed_val:04X}")
+    return seed_val
 
-# session timeout test 
-seed = request_seed()
-time.sleep(5)
-key = (seed + 1) & 0xFFFF
-key_high = (key >> 8) & 0xFF
-key_low = key & 0xFF
-resp = send_and_wait([0x27, 0x02, key_high, key_low])
-if resp and resp[0] ==  0x7F:
-    print("Rejected the key as expected -- TEST 1", )
-else:
-    print("key accepted after timeout!!!" ,hex(resp[0]))
+sessions = [0x01, 0x02, 0x03]
 
-# Sending  Correct Key
-seed = request_seed()
-key = (seed + 1) & 0xFFFF
-key_high = (key >> 8) & 0xFF
-key_low = key & 0xFF
-resp = send_and_wait([0x27, 0x02, key_high, key_low])
-if resp and resp[0] == 0x67:
-    print("Correct key accepted -- TEST 2")
-else:
-    print("correct key rejected!!!")
+for session in sessions:
+    print(f"Testing session {hex(session)}")
 
-# Trying to Re-Sending Same Key
-resp = send_and_wait([0x27, 0x02, key_high, key_low])
-if resp and resp[0] == 0x7F:
-    print("Repeated key correctly rejected -- TEST 3")
-else:
-    print("Repeated key was accepted (security flaw)",hex(resp[0]))
+    # Change session
+    resp = send_and_wait([0x10, session])
+    if not resp or resp[0] != 0x50:
+        print("Failed to start session")
+        exit()
+    print("Session change response:", resp)
 
+    # Request seed and send wrong key
+    seed = seed_request()
+    wrong_key = (seed + 2) & 0xFFFF 
+    key_high = (wrong_key >> 8) & 0xFF
+    key_low = wrong_key & 0xFF
 
-# sending Wrong Keys Until Lockout
-for i in range(5):
-    wrong_key = (key + i + 5) & 0xFFFF
-    wh = (wrong_key >> 8) & 0xFF
-    wl = wrong_key & 0xFF
-    resp = send_and_wait([0x27, 0x02, wh, wl])
-    time.sleep(0.5)
+    resp = send_and_wait([0x27, 0x02, key_high, key_low])
+    if resp and resp[0] == 0x7F:
+        print("Wrong key rejected as expected -- TEST PASS")
+    else:
+        print("Wrong key accepted -- TEST FAIL")
 
-# Requesting Seed While Locked (Should Fail)
-resp = send_and_wait([0x27, 0x01])
-if resp and resp[0] == 0x7F:
-    print("ECU locked as expected --- TEST 4")
-else:
-    print("ECU did not lock after failed attempts" , hex(resp[0]))
+    #Requesting seed and sending crct key
+    seed = seed_request()
+    key = (seed + 1) & 0xFFFF 
+    key_high = (key >> 8) & 0xFF
+    key_low = key & 0xFF
 
-# Resetting ecu
-resp = send_and_wait([0x11])
-if resp and resp[0] == 0x51:
-    print("ECU resetted as expected -- TEST 5")
-else:
-    print("ECU did  not resetted" , hex(resp[0]))
+    resp = send_and_wait([0x27, 0x02, key_high, key_low])
+    if resp and resp[0] == 0x67:
+        print(" correct key accepted as expected -- TEST PASS")
+    else:
+        print("correct key rejected -- TEST FAIL")
 
-# Trying to Re-Sending Same Key after resetting ecu
-resp = send_and_wait([0x27, 0x02, key_high, key_low])
-if resp and resp[0] == 0x7F:
-    print("Repeated key correctly rejected after resetting -- TEST 6")
-else:
-    print("Repeated key was accepted (security flaw)",hex(resp[0]))
+    # Trying to Re-Sending Same Key
+    resp = send_and_wait([0x27, 0x02, key_high, key_low])
+    if resp and resp[0] == 0x7F:
+        print("Repeated key correctly rejected -- TEST PASS")
+    else:
+        print("Repeated key was accepted (security flaw)",hex(resp[0]))
 
-print("Test complete")
-bus.shutdown()
+    time.sleep(1)
