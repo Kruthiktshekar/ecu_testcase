@@ -5,12 +5,12 @@ VCAN_CHANNEL = "vcan0"
 RESPONSE_ID = 0x7E8
 
 # Flood detection
-RESET_FLOOD_THRESHOLD = 10    
+RESET_MAX_RPS = 10    
 RESET_FLOOD_INTERVAL = 1      
-RESET_LOCKOUT_TIME = 2         
+RESET_LOCK = 2         
 
-COMM_LOCK_THRESHOLD = 20       
-COMM_LOCKOUT_TIME = 4       
+GLOBAL_MAX_RPS = 20       
+GLOBAL_LOCK = 4       
 
 # State
 reset_times = []
@@ -51,9 +51,9 @@ while True:
         reset_times.append(now)
 
          # Trigger full comms lock if massive flood
-        if len(reset_times) > COMM_LOCK_THRESHOLD:
-            comm_lock_until = now + COMM_LOCKOUT_TIME
-            print(f"Massive flood — Disabling ALL comms for {COMM_LOCKOUT_TIME}s")
+        if len(reset_times) > GLOBAL_MAX_RPS:
+            comm_lock_until = now + GLOBAL_LOCK
+            print(f"Massive flood — Disabling ALL comms for {GLOBAL_LOCK}s")
             send_negative(sid, 0x21)
             continue
 
@@ -64,9 +64,9 @@ while True:
             continue
 
         # Trigger reset lock
-        if len(reset_times) == RESET_FLOOD_THRESHOLD:
-            reset_lock_until = now + RESET_LOCKOUT_TIME
-            print(f"Flood detected for 0x11 — Locking reset for {RESET_LOCKOUT_TIME}s")
+        if len(reset_times) == RESET_MAX_RPS:
+            reset_lock_until = now + RESET_LOCK
+            print(f"Flood detected for 0x11 — Locking reset for {RESET_LOCK}s")
             send_negative(sid, 0x21)
             continue
 

@@ -25,7 +25,7 @@ flood(0x11, 30, 0.01)
 
 # Try comm control after lock
 flood(0x28, 3, 0.01)
-time.sleep(10)
+time.sleep(11)
 
 # Trying after ecu unlocked
 flood(0x28,3,0.01)
