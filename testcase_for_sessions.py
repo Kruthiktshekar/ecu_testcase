@@ -73,4 +73,4 @@ for session in sessions:
     else:
         print("Repeated key was accepted (security flaw)",hex(resp[0]))
 
-    time.sleep(1)
+    time.sleep(2)

@@ -87,8 +87,8 @@ while True:
                 print(f"Correct key for seed {seed:04X}")
                 bus.send(can.Message(arbitration_id=RESPONSE_ID, data=[0x67, subfn], is_extended_id=False))
                 failed_attempts = 0
-                last_key = key_recv
                 locked_until = 0
+                last_key = key_recv
 
             else:
                 print('wrong keyy')
